@@ -1,0 +1,11 @@
+{
+  "fps": 16,
+  "size": 768,
+  "loops": {
+    "idle": 4,
+    "talk": 3,
+    "listen": 3,
+    "think": 3,
+    "happy": 2
+  }
+}

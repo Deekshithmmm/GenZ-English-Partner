@@ -1,0 +1,21 @@
+# Local configuration and secrets. Copy .env.example to .env; never commit the real one.
+.env
+.env.*
+!.env.example
+
+# Backend build output, and the clips it keeps from a paid voice
+backend/target/
+backend/data/
+
+# Python caches from the art tools (mobile/tools) and the voice service
+__pycache__/
+
+# The voice service's model and clip cache when it runs outside Docker
+tts/models/
+tts/cache/
+
+# IDEs and OS files
+.idea/
+*.iml
+.DS_Store
+Thumbs.db

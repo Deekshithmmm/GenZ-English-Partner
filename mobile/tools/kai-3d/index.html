@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Kai 3D</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+      }
+      body.preview {
+        background: radial-gradient(circle at 50% 35%, #ffffff 0%, #ece8ff 55%, #d9d2ff 100%);
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/node_modules/three/build/three.module.js",
+          "three/addons/": "/node_modules/three/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <script type="module" src="./kai.js"></script>
+  </body>
+</html>

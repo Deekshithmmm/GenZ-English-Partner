@@ -1,0 +1,13 @@
+{
+  "name": "kai-3d",
+  "private": true,
+  "description": "Renders Kai, the app's 3D tutor, into the animated images the app plays. See README.md.",
+  "type": "module",
+  "scripts": {
+    "render": "node render.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.55.0",
+    "three": "^0.186.1"
+  }
+}

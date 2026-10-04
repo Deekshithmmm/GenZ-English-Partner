@@ -1,0 +1,17 @@
+app:
+  jwt:
+    secret: test-only-secret-test-only-secret-0123456789
+  auth:
+    google:
+      provider: mock
+  cors:
+    allowed-origins: http://localhost:8081
+  ai:
+    llm:
+      provider: mock
+    stt:
+      provider: mock
+    tts:
+      provider: mock
+    pronunciation:
+      provider: mock

@@ -2,6 +2,7 @@ package com.genzenglish.partner.speech;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import com.genzenglish.partner.auth.CurrentUser;
 import com.genzenglish.partner.common.ApiException;
@@ -31,6 +33,11 @@ import com.genzenglish.partner.profile.ProfileService;
 @RestController
 @RequestMapping("/api/v1/speech")
 public class SpeechController {
+
+    /** How long a live clip may take to produce its first audio before the app is told to say the line another way. */
+    static final Duration FIRST_AUDIO_WITHIN = Duration.ofSeconds(10);
+    /** A live clip that sends nothing new for this long has stalled; what's been sent is all there is. */
+    static final Duration STALLED_AFTER = Duration.ofSeconds(15);
 
     private final SpeechClipStore clips;
     private final KaiVoice voice;
@@ -67,6 +74,41 @@ public class SpeechController {
     @GetMapping("/languages")
     public LanguagesResponse languages() {
         return new LanguagesResponse(voice.languages());
+    }
+
+    /**
+     * A clip that may still be being made (Luna's reply in a conversation): its audio is sent as it arrives, so Luna
+     * starts talking before the whole line is made. Once it's made, it's sent whole like any other clip.
+     */
+    @GetMapping("/live/{id}")
+    public ResponseEntity<StreamingResponseBody> liveClip(@PathVariable String id) throws InterruptedException {
+        Optional<SpeechClipStore.LiveClip> making = clips.live(id);
+        if (making.isPresent()) {
+            SpeechClipStore.LiveClip clip = making.get();
+            // Answer once audio is flowing: if the voice fails first, the app gets an error and says the line another
+            // way instead of playing nothing.
+            if (!clip.awaitStart(FIRST_AUDIO_WITHIN)) {
+                throw ApiException.unavailable("voice_failed", "Luna's voice didn't come through. Tap replay.");
+            }
+            StreamingResponseBody body = out -> {
+                try {
+                    clip.copyTo(out, STALLED_AFTER);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            };
+            return ResponseEntity.ok().contentType(MediaType.parseMediaType(clip.contentType()))
+                    .cacheControl(CacheControl.noStore()).body(body);
+        }
+        SpeechClipStore.Clip clip = clips.get(id)
+                .orElseThrow(() -> ApiException.notFound("clip_expired", "That audio has expired. Tap replay again."));
+        byte[] audio = clip.audio();
+        StreamingResponseBody whole = out -> out.write(audio);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(clip.contentType()))
+                .contentLength(audio.length)
+                .cacheControl(CacheControl.maxAge(Duration.ofMinutes(10)).cachePrivate())
+                .body(whole);
     }
 
     @GetMapping("/{id}")

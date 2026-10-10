@@ -13,12 +13,12 @@ class PracticeSummaryTest {
 
     @Test
     void xpRewardsAnswersSpeakingAndFinishing() {
-        PracticeRewards.Reward finished = PracticeRewards.of(new SessionStats(4, 3, 70, 120, 110, 2, "um"), 4);
+        PracticeRewards.Reward finished = PracticeRewards.of(new SessionStats(4, 3, 70, 120, 110, 2, "um"), true);
         assertThat(finished.items()).containsExactly(new XpItem("4 answers", 40), new XpItem("Spoken out loud", 15),
                 new XpItem("Finished the session", 20));
         assertThat(finished.total()).isEqualTo(75);
 
-        PracticeRewards.Reward early = PracticeRewards.of(new SessionStats(1, 0, 0, 12, null, 0, null), 4);
+        PracticeRewards.Reward early = PracticeRewards.of(new SessionStats(1, 0, 0, 12, null, 0, null), false);
         assertThat(early.items()).containsExactly(new XpItem("1 answer", 10));
         assertThat(early.total()).isEqualTo(10);
     }

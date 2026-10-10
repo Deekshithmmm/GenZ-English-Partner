@@ -74,8 +74,60 @@ class ElevenLabsTextToSpeechTest {
     }
 
     private ElevenLabsTextToSpeech tts(String key, String voice) {
-        return new ElevenLabsTextToSpeech(key, voice, "eleven_v4_turbo", "http://127.0.0.1:" + server.getAddress().getPort(),
-                2);
+        return new ElevenLabsTextToSpeech(key, voice, "eleven_v4_turbo", "eleven_flash_v2_5",
+                "http://127.0.0.1:" + server.getAddress().getPort(), 2);
+    }
+
+    @Test
+    void aLiveLineIsStreamedAsItsMade() {
+        ElevenLabsTextToSpeech tts = tts("test-key", "voice123");
+        java.io.ByteArrayOutputStream heard = new java.io.ByteArrayOutputStream();
+
+        tts.stream(new TextToSpeechRequest("What did you buy?", TutorVoice.KAI_WARM, 1.0, "en-IN", false, true),
+                heard::writeBytes);
+
+        assertThat(heard.toByteArray()).isEqualTo(MP3);
+        HttpExchange call = exchanges.getFirst();
+        assertThat(call.getRequestURI().getPath()).isEqualTo("/v1/text-to-speech/voice123/stream");
+        assertThat(call.getRequestURI().getQuery()).isEqualTo("output_format=mp3_44100_64");
+        assertThat(call.getRequestHeaders().getFirst("xi-api-key")).isEqualTo("test-key");
+        assertThat(bodies.getFirst().get("model_id").asString()).isEqualTo("eleven_flash_v2_5");
+    }
+
+    @Test
+    void aBusyAccountIsAskedAgainWhenStreaming() {
+        upcoming.add(429);
+        java.io.ByteArrayOutputStream heard = new java.io.ByteArrayOutputStream();
+
+        tts("test-key", "voice123").stream(
+                new TextToSpeechRequest("Hello!", TutorVoice.KAI_WARM, 1.0, "en-IN", false, true), heard::writeBytes);
+
+        assertThat(heard.toByteArray()).isEqualTo(MP3);
+        assertThat(exchanges).hasSize(2);
+    }
+
+    @Test
+    void aStreamThatIsRefusedThrowsSoTheAppSaysTheLineAnotherWay() {
+        status = 401;
+
+        assertThatThrownBy(() -> tts("test-key", "voice123").stream(
+                new TextToSpeechRequest("Hello!", TutorVoice.KAI_WARM, 1.0, "en-IN", false, true), piece -> { }))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("401");
+    }
+
+    @Test
+    void lunasEnglishConversationLinesUseTheLiveModel() {
+        ElevenLabsTextToSpeech tts = tts("test-key", "voice123");
+
+        tts.synthesize(new TextToSpeechRequest("What did you buy?", TutorVoice.KAI_WARM, 1.0, "en-IN", false, true));
+        // Flash doesn't speak Kannada, and lessons aren't live: both stay on the main model.
+        tts.synthesize(new TextToSpeechRequest("ನಾನು ಲೂನಾ.", TutorVoice.KAI_WARM, 1.0, "kn-IN", false, true));
+        tts.synthesize(new TextToSpeechRequest("Use am with I.", TutorVoice.KAI_WARM, 1.0, "en-IN", false));
+
+        assertThat(bodies).extracting(b -> b.get("model_id").asString())
+                .containsExactly("eleven_flash_v2_5", "eleven_v4_turbo", "eleven_v4_turbo");
+        assertThat(tts.makesLiveLines()).isTrue();
+        assertThat(tts("", "voice123").makesLiveLines()).as("not set up: the phone speaks").isFalse();
     }
 
     @Test

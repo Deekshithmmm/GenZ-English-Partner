@@ -5,9 +5,10 @@ package com.genzenglish.partner.practice;
  * built from their résumé or a job description.
  */
 public enum PracticeKind {
-    WARM_UP(SessionType.WARM_UP, 4),
-    ROLEPLAY(SessionType.ROLEPLAY, 6),
-    FREE_TALK(SessionType.FREE_TALK, 8),
+    WARM_UP(SessionType.WARM_UP, 6),
+    ROLEPLAY(SessionType.ROLEPLAY, 10),
+    // Free talk runs on time (ten minutes); this many answers is only an upper bound.
+    FREE_TALK(SessionType.FREE_TALK, 40),
     INTERVIEW(SessionType.INTERVIEW, InterviewPlanner.QUESTIONS);
 
     private final SessionType sessionType;

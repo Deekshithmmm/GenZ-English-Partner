@@ -37,8 +37,10 @@ public final class PracticeDtos {
     /**
      * @param brief       what the learner is doing: the warm-up topic, their goal in a roleplay, or the job in a mock
      *                    interview
-     * @param targetTurns answers before Luna wraps up
-     * @param criteria    what counts as success in a roleplay or interview; empty for other chats
+     * @param targetTurns      answers before Luna wraps up; for a chat that runs on time, only an upper bound
+     * @param timeLimitSeconds how long a chat that runs on time lasts (free talk); null when it ends after
+     *                         {@code targetTurns} answers
+     * @param criteria         what counts as success in a roleplay or interview; empty for other chats
      */
     public record StartResponse(
             UUID sessionId,
@@ -48,6 +50,7 @@ public final class PracticeDtos {
             String brief,
             int turnNumber,
             int targetTurns,
+            Integer timeLimitSeconds,
             KaiLine kai,
             List<String> criteria) {
     }
@@ -58,7 +61,7 @@ public final class PracticeDtos {
     }
 
     /** No scene runs longer than this; it bounds turn numbers before the session is even loaded. */
-    public static final int MAX_TURNS = 12;
+    public static final int MAX_TURNS = 40;
 
     /**
      * @param feedback         corrections for this answer, shown under the learner's words

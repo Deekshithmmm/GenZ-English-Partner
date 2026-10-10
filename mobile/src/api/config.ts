@@ -13,8 +13,15 @@ function resolveApiUrl(): string {
     return explicit.replace(/\/+$/, '');
   }
   if (Platform.OS === 'web') {
-    const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-    return `http://${host}:${API_PORT}`;
+    if (typeof window === 'undefined') {
+      return `http://localhost:${API_PORT}`;
+    }
+    // An https page can't call plain http, so over https the API is reached through the page's own address (a phone
+    // uses https for the mic; tools/phone.mjs passes /api on to the backend).
+    if (window.location.protocol === 'https:') {
+      return window.location.origin;
+    }
+    return `http://${window.location.hostname}:${API_PORT}`;
   }
   const devHost = Constants.expoConfig?.hostUri?.split(':')[0];
   if (devHost && devHost !== 'localhost' && devHost !== '127.0.0.1') {

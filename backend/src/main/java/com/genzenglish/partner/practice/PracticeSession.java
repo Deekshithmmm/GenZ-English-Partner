@@ -86,6 +86,10 @@ public class PracticeSession {
     @Column(name = "vocabulary_score")
     private Integer vocabularyScore;
 
+    /** The answer Luna wrapped up after; null while the chat is still going. */
+    @Column(name = "final_turn")
+    private Integer finalTurn;
+
     protected PracticeSession() {
     }
 
@@ -131,6 +135,13 @@ public class PracticeSession {
             this.grammarScore = scores.grammar();
             this.pronunciationScore = scores.pronunciation();
             this.vocabularyScore = scores.vocabulary();
+        }
+    }
+
+    /** Luna wrapped the chat up after answer {@code turnNumber}. */
+    public void wrapUpAt(int turnNumber) {
+        if (finalTurn == null) {
+            finalTurn = turnNumber;
         }
     }
 
@@ -227,5 +238,9 @@ public class PracticeSession {
 
     public Integer getVocabularyScore() {
         return vocabularyScore;
+    }
+
+    public Integer getFinalTurn() {
+        return finalTurn;
     }
 }

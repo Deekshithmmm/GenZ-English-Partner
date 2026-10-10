@@ -50,7 +50,7 @@ export default function TalkScreen() {
         <SpeechBubble>
           <AppText variant="bodyStrong">What do you feel like talking about today?</AppText>
           <AppText variant="small" tone="muted">
-            I&apos;ll keep the chat going and note your slips on the side.
+            We can talk for up to 10 minutes. I&apos;ll keep the chat going and note your slips on the side.
           </AppText>
         </SpeechBubble>
       </View>

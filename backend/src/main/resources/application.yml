@@ -63,11 +63,30 @@ app:
       client-ids: ${GOOGLE_CLIENT_IDS:}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+    # true also lets in pages served from a private network address (10.x, 172.16-31.x, 192.168.x), so a phone on the
+    # same Wi-Fi or hotspot can open the web app at the laptop's address. Development only.
+    allow-lan: ${CORS_ALLOW_LAN:false}
   ai:
     llm:
+      # mock = sample replies that don't depend on what the learner said (offline); gemini = Google's Gemini models
       provider: ${LLM_PROVIDER:mock}
+      gemini:
+        # A key from aistudio.google.com; when it's empty, GOOGLE_API_KEY (the name Google's own tools use) is used
+        api-key: ${GEMINI_API_KEY:}
+        # Tried in order: when one is busy, slow to start or out of requests, the next one answers. Luna's side of the
+        # conversation goes to fast models; notes on each answer, summaries and assessments go strongest first, since
+        # the strongest model allows only 20 requests a day on the free tier. A model must start answering within 5 s
+        # for what the learner is waiting on, or 10 s for summaries and assessments (the last model in a list gets
+        # 30 s); once started, it has all the time it needs to finish.
+        reply-models: ${GEMINI_REPLY_MODELS:gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.8-flash}
+        smart-models: ${GEMINI_SMART_MODELS:gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite}
     stt:
+      # mock = can't hear, returns a sample answer; elevenlabs = ElevenLabs speech-to-text, which writes down what
+      # the learner really said (same key as the voice below)
       provider: ${STT_PROVIDER:mock}
+      elevenlabs:
+        api-key: ${ELEVENLABS_API_KEY:}
+        model: ${ELEVENLABS_STT_MODEL:scribe_v2}
     tts:
       # mock = the phone's own voice; kokoro = a free neural voice from tts/server.py (docker compose up -d tts),
       # English only; elevenlabs = an ElevenLabs voice for every language (needs a key and a voice ID)
@@ -77,10 +96,16 @@ app:
         api-key: ${ELEVENLABS_API_KEY:}
         voice-id: ${ELEVENLABS_VOICE_ID:}
         model: ${ELEVENLABS_MODEL:eleven_v4_turbo}
+        # Luna's English lines in a conversation: a whole reply in about half a second (Flash doesn't speak Kannada,
+        # so lessons keep the main model). Empty to use the main model for everything.
+        live-model: ${ELEVENLABS_LIVE_MODEL:eleven_flash_v2_5}
     pronunciation:
       provider: ${PRONUNCIATION_PROVIDER:mock}
   speech:
     # Paid voices' clips are kept here, so each sentence is only made (and paid for) once.
     cache-dir: ${SPEECH_CACHE_DIR:data/speech-cache}
+  practice:
+    # How long a free chat with Luna runs before she wraps up (the learner can finish sooner)
+    free-talk-time: ${FREE_TALK_TIME:10m}
   privacy:
     keep-audio-by-default: false

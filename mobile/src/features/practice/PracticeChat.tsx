@@ -66,6 +66,26 @@ function briefIcon(session: PracticeStart): Icon3DName {
 let lineCounter = 0;
 const nextLineId = () => `practice-line-${++lineCounter}`;
 
+/** In a chat that runs on time, the server makes the first answer this close to the end the last one. */
+const LAST_ANSWER_SECONDS = 30;
+
+function clockText(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+/** Seconds since `startedAt`, ticking once a second while `running`. */
+function useElapsedSeconds(startedAt: number | null, running: boolean): number {
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    if (!running) {
+      return;
+    }
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
+  return startedAt == null || now < startedAt ? 0 : Math.floor((now - startedAt) / 1000);
+}
+
 type Props = {
   kind: PracticeKind;
   /** The roleplay slug (e.g. "hr-interview") or free-talk topic slug. */
@@ -79,8 +99,9 @@ type Props = {
 /**
  * A practice chat with Luna: warm-up, roleplay, free talk or mock interview. Answers stream back, so Luna's words appear
  * as they're written and Luna starts talking before the feedback is ready; Luna's notes then appear under the learner's
- * words. Luna wraps up after a few answers and the session ends on a summary with scores and XP. Answers are idempotent
- * per turn on the server, so resending after a dropped connection is safe.
+ * words. Luna wraps up after a few answers (free talk: when its ten minutes are nearly up) and the session ends on a
+ * summary with scores and XP. Answers are idempotent per turn on the server, so resending after a dropped connection is
+ * safe.
  */
 export function PracticeChat({ kind, scenario, context, onEditContext }: Props) {
   const { colors } = useTheme();
@@ -95,6 +116,10 @@ export function PracticeChat({ kind, scenario, context, onEditContext }: Props) 
   const [problem, setProblem] = useState<Problem | null>(null);
   const [hint, setHint] = useState<Hint>({ state: 'idle' });
   const [mode, setMode] = useState<AnswerMode>('voice');
+  // When the chat started, for chats that run on time.
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const timeLimit = session?.timeLimitSeconds ?? null;
+  const elapsed = useElapsedSeconds(startedAt, timeLimit != null && (status === 'ready' || status === 'sending'));
   const started = useRef(false);
   // False once the learner has left, so a late response can't talk or navigate them somewhere else.
   const onScreen = useRef(true);
@@ -123,6 +148,7 @@ export function PracticeChat({ kind, scenario, context, onEditContext }: Props) 
       }
       const start = await practiceApi.start(request);
       setSession(start);
+      setStartedAt(Date.now());
       setTurn(start.turnNumber);
       setLines([{ id: nextLineId(), speaker: 'kai', line: start.kai }]);
       setStatus('ready');
@@ -324,6 +350,18 @@ export function PracticeChat({ kind, scenario, context, onEditContext }: Props) 
   const title = session?.title ?? DEFAULT_TITLE[kind];
   const finished = status === 'finishing' || status === 'finish-failed';
   const canFinishEarly = answered >= 1 && answered < target;
+  // Free talk runs on time: the header shows the clock instead of a count of answers.
+  const total = timeLimit ?? target;
+  const step = finished ? total : timeLimit != null ? Math.min(elapsed, timeLimit) : answered;
+  let progress = `${answered} of ${target}`;
+  if (finished) {
+    progress = 'done';
+  } else if (timeLimit != null) {
+    progress = `${clockText(Math.min(elapsed, timeLimit))} of ${clockText(timeLimit)}`;
+    if (timeLimit - elapsed <= LAST_ANSWER_SECONDS) {
+      progress += ' · last answer';
+    }
+  }
   const notice = problem ? (
     <Notice tone="error" message={problem.message} actionLabel={problem.actionLabel} onAction={problem.onAction} />
   ) : null;
@@ -377,9 +415,9 @@ export function PracticeChat({ kind, scenario, context, onEditContext }: Props) 
   return (
     <Screen scroll={false} footer={footer}>
       <StepHeader
-        step={finished ? target : answered}
-        total={target}
-        label={session ? `${title} · ${finished ? 'done' : `${answered} of ${target}`}` : title}
+        step={step}
+        total={total}
+        label={session ? `${title} · ${progress}` : title}
         canGoBack={status !== 'finishing'}
         backLabel="Leave the chat"
       />

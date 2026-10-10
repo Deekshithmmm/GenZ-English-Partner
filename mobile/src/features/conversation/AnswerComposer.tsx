@@ -2,7 +2,13 @@ import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'rea
 import { StyleSheet, View } from 'react-native';
 
 import { stopKai } from '@/audio/kaiSpeech';
-import { MAX_RECORDING_MS, MicPermissionDenied, useVoiceRecorder, type RecordedClip } from '@/audio/useVoiceRecorder';
+import {
+  MAX_RECORDING_MS,
+  MicNeedsSecurePage,
+  MicPermissionDenied,
+  useVoiceRecorder,
+  type RecordedClip,
+} from '@/audio/useVoiceRecorder';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { MicButton, useEffectiveMicMode } from '@/components/MicButton';
@@ -63,6 +69,8 @@ export function AnswerComposer({
   const [problem, setProblem] = useState<Problem | null>(null);
   const [draft, setDraft] = useState('');
   const pressedAt = useRef(0);
+  /** The mic couldn't start this time; its problem is already showing and letting go mustn't replace it. */
+  const startFailed = useRef(false);
   const recording = recorder.phase === 'recording';
   const reportRecording = useEffectEvent((on: boolean) => onRecordingChange?.(on));
   useEffect(() => {
@@ -76,12 +84,14 @@ export function AnswerComposer({
     setProblem(null);
     stopKai();
     pressedAt.current = Date.now();
+    startFailed.current = false;
     try {
       await recorder.start();
     } catch (error) {
+      startFailed.current = true;
       setProblem({
         message:
-          error instanceof MicPermissionDenied
+          error instanceof MicPermissionDenied || error instanceof MicNeedsSecurePage
             ? error.message
             : "The mic didn't start. Try again, or type your answer instead.",
         fix: 'type',
@@ -92,9 +102,19 @@ export function AnswerComposer({
   async function finishRecording() {
     const clip = await recorder.stop().catch(() => null);
     if (!clip) {
+      if (startFailed.current) {
+        return;
+      }
       if (micMode === 'hold' && Date.now() - pressedAt.current < QUICK_TAP_MS) {
         // Holding is hard for some people (and impossible with most screen readers): offer tapping instead.
         setProblem({ message: 'Keep holding the mic while you talk, then let go to send.', fix: 'tap' });
+      } else {
+        // Let go while the mic was still starting (the first time, the browser asks for permission): nothing was
+        // recorded, so say so instead of quietly doing nothing.
+        setProblem({
+          message: 'The mic wasn\'t ready yet, so nothing was recorded. Hold it again and start talking when you see "Listening…".',
+          fix: null,
+        });
       }
       return;
     }

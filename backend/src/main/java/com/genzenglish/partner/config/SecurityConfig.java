@@ -55,7 +55,7 @@ public class SecurityConfig {
                         .permitAll()
                         // Clips are fetched by an unguessable ID by audio players, which can't send auth headers;
                         // making speech needs a signed-in learner.
-                        .requestMatchers(HttpMethod.GET, "/api/v1/speech/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/speech/*", "/api/v1/speech/live/*").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> {
@@ -94,7 +94,7 @@ public class SecurityConfig {
 
     @Bean
     CorsConfigurationSource corsConfigurationSource(AppProperties props) {
-        CorsConfiguration config = new CorsConfiguration();
+        CorsConfiguration config = props.cors().allowLan() ? new LanCorsConfiguration() : new CorsConfiguration();
         config.setAllowedOriginPatterns(props.cors().allowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Request-Id"));

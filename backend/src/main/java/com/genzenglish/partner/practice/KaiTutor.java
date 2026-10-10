@@ -23,14 +23,15 @@ import com.genzenglish.partner.practice.RoleplayCatalog.Roleplay;
 @Component
 class KaiTutor {
 
-    static final String FALLBACK = "I like that. Can you tell me a bit more?";
+    /** Only when no model answered: honest that Luna missed it, rather than pretending she followed. */
+    static final String FALLBACK = "Sorry, I lost my train of thought for a second. Could you say that again?";
     static final String CLOSING_FALLBACK = "That was great practice. Let's stop here for today.";
     /** Also lets the mock recognise the final exchange. */
     static final String CLOSING_INSTRUCTION = "This is the last exchange.";
     /** Starts the line naming the interview question Luna asks next; the mock reads the question from it. */
     static final String NEXT_QUESTION = "Your next planned question:";
     static final String INTERVIEW_SCENE = "This is a mock HR interview";
-    static final int MAX_CHARS = 420;
+    static final int MAX_CHARS = 480;
     private static final Logger log = LoggerFactory.getLogger(KaiTutor.class);
 
     private final LlmClient llm;
@@ -96,7 +97,7 @@ class KaiTutor {
             messages.add(LlmMessage.assistant(exchange.kai()));
         }
         messages.add(LlmMessage.user(answer));
-        return LlmRequest.text(LlmTask.TUTOR_REPLY, system, messages, 180);
+        return LlmRequest.text(LlmTask.TUTOR_REPLY, system, messages, 250);
     }
 
     static String warmUpScene(String topic) {
@@ -111,9 +112,11 @@ class KaiTutor {
         String about = topic == FreeTalkTopics.OPEN ? "whatever the learner wants to talk about"
                 : "\"" + topic.title() + "\"";
         return """
-                This is a relaxed free chat the learner chose to have, about %s. Talk like a friend: react to what \
-                they say, now and then share a short opinion of your own, and ask natural follow-up questions. \
-                Follow the learner if they change the subject.
+                This is a relaxed free chat the learner chose to have, about %s. It can run for up to ten minutes, \
+                so keep it going like a good conversation between friends: react to what they say, now and then \
+                share a short opinion of your own, and ask natural follow-up questions. When a thread runs dry, \
+                move on to a related angle they haven't talked about yet. Follow the learner if they change the \
+                subject.
                 """.formatted(about);
     }
 

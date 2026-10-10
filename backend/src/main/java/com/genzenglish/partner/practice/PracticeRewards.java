@@ -22,19 +22,22 @@ final class PracticeRewards {
     record Reward(int total, List<XpItem> items) {
     }
 
-    static Reward of(SessionStats stats, int targetTurns) {
-        return of(stats, targetTurns, false);
+    static Reward of(SessionStats stats, boolean finished) {
+        return of(stats, finished, false);
     }
 
-    /** @param goalReached every success criterion of a roleplay or interview was met */
-    static Reward of(SessionStats stats, int targetTurns, boolean goalReached) {
+    /**
+     * @param finished    the chat ran to its end (Luna wrapped up) rather than being finished early
+     * @param goalReached every success criterion of a roleplay or interview was met
+     */
+    static Reward of(SessionStats stats, boolean finished, boolean goalReached) {
         List<XpItem> items = new ArrayList<>();
         items.add(new XpItem(stats.answers() == 1 ? "1 answer" : stats.answers() + " answers",
                 stats.answers() * PER_ANSWER));
         if (stats.voiceAnswers() > 0) {
             items.add(new XpItem("Spoken out loud", stats.voiceAnswers() * SPOKEN_BONUS));
         }
-        if (stats.answers() >= targetTurns) {
+        if (finished) {
             items.add(new XpItem("Finished the session", FINISH_BONUS));
         }
         if (goalReached) {

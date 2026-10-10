@@ -32,4 +32,9 @@ public enum ExplanationLanguage {
     public String nativeName() {
         return nativeName;
     }
+
+    /** The script the language is written in, read from its own name: Kannada for ಕನ್ನಡ, Latin for English. */
+    public Character.UnicodeScript script() {
+        return Character.UnicodeScript.of(nativeName.codePointAt(0));
+    }
 }

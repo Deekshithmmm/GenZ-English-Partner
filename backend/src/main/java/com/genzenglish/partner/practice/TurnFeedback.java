@@ -138,7 +138,9 @@ public record TurnFeedback(List<Correction> corrections, String tip, String bett
                 continue;
             }
             String why = isBlank(candidate.why()) ? null : truncate(candidate.why().strip(), MAX_WHY);
-            String whyNative = !nativeWanted || isBlank(candidate.whyNative()) ? null
+            // A reason in the wrong script (a Malayalam word in a Kannada note) is dropped; the template fills in.
+            String whyNative = !nativeWanted || isBlank(candidate.whyNative())
+                    || !writtenIn(candidate.whyNative(), language) ? null
                     : truncate(candidate.whyNative().strip(), MAX_WHY_NATIVE);
             kept.add(new Correction(original, better, why, whyNative));
             if (kept.size() == MAX_CORRECTIONS) {
@@ -148,6 +150,29 @@ public record TurnFeedback(List<Correction> corrections, String tip, String bett
         String tip = isBlank(raw.tip()) ? null : truncate(raw.tip().strip(), MAX_TIP);
         return new TurnFeedback(kept, tip, betterPhrasing(raw.betterPhrasing(), said), newWords(raw.newWords(), said),
                 List.of(), List.of());
+    }
+
+    /**
+     * Written in the language's own script: at least one letter of it, English words in Latin letters allowed, and no
+     * letters from any other script. Vowel signs and joiners aren't letters, so they don't count either way.
+     */
+    static boolean writtenIn(String text, ExplanationLanguage language) {
+        Character.UnicodeScript own = language.script();
+        boolean any = false;
+        for (int i = 0; i < text.length(); ) {
+            int codePoint = text.codePointAt(i);
+            i += Character.charCount(codePoint);
+            if (!Character.isLetter(codePoint)) {
+                continue;
+            }
+            Character.UnicodeScript script = Character.UnicodeScript.of(codePoint);
+            if (script == own) {
+                any = true;
+            } else if (script != Character.UnicodeScript.LATIN) {
+                return false;
+            }
+        }
+        return any;
     }
 
     /** Only a rewrite that changes something and is still about the length of a spoken answer. */

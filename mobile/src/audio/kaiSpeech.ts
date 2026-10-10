@@ -450,18 +450,26 @@ let playing: { finish: () => void } | null = null;
 
 /**
  * Plays a clip and resolves when it ends, is stopped, can't play, or (if it never says it ended) shortly after it
- * should have.
+ * should have. Resolves false when the clip couldn't be played at all (gone, or not audio), so the caller can say the
+ * line another way.
  */
-function playClip(url: string, rate: number): Promise<void> {
+function playClip(url: string, rate: number): Promise<boolean> {
   playing?.finish();
   return new Promise((resolve) => {
     let timer = setTimeout(() => entry.finish(), 30_000);
-    /** Once the clip's length is known, the fallback is its length plus a little. */
+    /**
+     * Once the clip's length is known, the fallback is its length plus a little. A clip that's still arriving has no
+     * length yet (Infinity), and a timer that long would fire at once, so it keeps the first fallback.
+     */
     const expect = (seconds: number) => {
+      if (!Number.isFinite(seconds) || seconds <= 0) {
+        return;
+      }
       clearTimeout(timer);
       timer = setTimeout(() => entry.finish(), (seconds * 1000) / rate + 3000);
     };
     let release = () => {};
+    let playable = true;
     const entry = {
       finish: () => {
         if (playing !== entry) {
@@ -470,7 +478,7 @@ function playClip(url: string, rate: number): Promise<void> {
         playing = null;
         clearTimeout(timer);
         release();
-        resolve();
+        resolve(playable);
       },
     };
     playing = entry;
@@ -480,15 +488,25 @@ function playClip(url: string, rate: number): Promise<void> {
     if (Platform.OS === 'web' && typeof Audio !== 'undefined') {
       const audio = new Audio(url);
       audio.playbackRate = rate;
-      audio.onloadedmetadata = () => expect(audio.duration);
+      // A streamed clip's length is only known once all of it has arrived, which the browser reports as a change.
+      audio.onloadedmetadata = audio.ondurationchange = () => expect(audio.duration);
       audio.onended = () => entry.finish();
-      audio.onerror = () => entry.finish();
+      audio.onerror = () => {
+        playable = false;
+        entry.finish();
+      };
       release = () => {
-        audio.onended = audio.onerror = audio.onloadedmetadata = null;
+        audio.onended = audio.onerror = audio.onloadedmetadata = audio.ondurationchange = null;
         audio.pause();
         audio.removeAttribute('src');
       };
-      audio.play().catch(() => entry.finish());
+      audio.play().catch((error: unknown) => {
+        // Stopped while starting is fine; anything else means the clip didn't play.
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          playable = false;
+        }
+        entry.finish();
+      });
       return;
     }
 
@@ -497,7 +515,7 @@ function playClip(url: string, rate: number): Promise<void> {
     const subscription = clip.addListener('playbackStatusUpdate', (status) => {
       if (status.didJustFinish) {
         entry.finish();
-      } else if (!timed && status.isLoaded && status.duration > 0) {
+      } else if (!timed && status.isLoaded && Number.isFinite(status.duration) && status.duration > 0) {
         timed = true;
         expect(status.duration);
       }
@@ -640,16 +658,16 @@ export async function speakKai(line: KaiLine, options: { slow?: boolean; onDone?
   if (line.speech.mode === 'AUDIO' && line.speech.audioUrl) {
     stopKai();
     const mine = generation;
-    try {
-      setSpeaking(true);
-      await playClip(absoluteUrl(line.speech.audioUrl), line.speech.rate * (options.slow ? 0.75 : 1));
-    } finally {
+    setSpeaking(true);
+    const played = await playClip(absoluteUrl(line.speech.audioUrl), line.speech.rate * (options.slow ? 0.75 : 1));
+    if (played || generation !== mine) {
       if (generation === mine) {
         setSpeaking(false);
       }
       options.onDone?.();
+      return;
     }
-    return;
+    // The line's clip is gone (the server keeps them ten minutes) or wouldn't play: say it sentence by sentence.
   }
   await speakKaiParts([{ text: line.text, languageTag: line.speech.languageTag }], line.speech, options);
 }

@@ -179,7 +179,10 @@ export type PracticeStart = {
   /** Who Luna plays in a roleplay or interview, written to follow "Luna plays". */
   kaiRole?: string | null;
   turnNumber: number;
+  /** Answers before Luna wraps up; for a chat that runs on time, only an upper bound. */
   targetTurns: number;
+  /** How long a chat that runs on time lasts (free talk: ten minutes); absent when it ends after `targetTurns`. */
+  timeLimitSeconds?: number | null;
   kai: KaiLine;
   /** What counts as success in a roleplay or interview; empty for other chats. */
   criteria: string[];

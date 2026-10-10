@@ -369,13 +369,14 @@ public class GrammarCurriculum {
             Map.entry("can't", "can not"), Map.entry("couldn't", "could not"), Map.entry("shouldn't", "should not"),
             Map.entry("mustn't", "must not"), Map.entry("let's", "let us"));
 
+    /** Words with contractions spelled out and numbers as digits, however speech recognition wrote them. */
     static String[] expanded(String text) {
         List<String> out = new ArrayList<>();
         for (String word : words(text)) {
             String spelled = CONTRACTIONS.get(word);
             out.addAll(spelled == null ? List.of(word) : List.of(spelled.split(" ")));
         }
-        return out.toArray(String[]::new);
+        return SpokenNumbers.asDigits(out).toArray(String[]::new);
     }
 
     /** 0..1: how many words the two have in common, in order (the longest common subsequence, as a Dice score). */
@@ -424,9 +425,13 @@ public class GrammarCurriculum {
         }
 
         /** Cues may be anywhere in the answer; slips are looked for one sentence at a time. */
+        /** Patterns are written with words or digits; speech recognition may write a number either way. */
         boolean matches(String said) {
             String text = TurnFeedback.normalize(said);
-            return !text.isEmpty() && cues.stream().allMatch(p -> p.matcher(text).find()) && clean(said);
+            String spelled = SpokenNumbers.spelledOut(text);
+            return !text.isEmpty()
+                    && cues.stream().allMatch(p -> p.matcher(text).find() || p.matcher(spelled).find())
+                    && clean(said);
         }
 
         boolean clean(String said) {
@@ -435,7 +440,8 @@ public class GrammarCurriculum {
             }
             for (String sentence : said.strip().split("(?<=[.!?])\\s+")) {
                 String words = TurnFeedback.normalize(sentence);
-                if (avoid.stream().anyMatch(p -> p.matcher(words).find())) {
+                String spelled = SpokenNumbers.spelledOut(words);
+                if (avoid.stream().anyMatch(p -> p.matcher(words).find() || p.matcher(spelled).find())) {
                     return false;
                 }
             }

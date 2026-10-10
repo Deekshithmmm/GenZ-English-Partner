@@ -1,5 +1,6 @@
 import {
   AudioQuality,
+  getRecordingPermissionsAsync,
   IOSOutputFormat,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
@@ -44,6 +45,24 @@ export class MicPermissionDenied extends Error {
   }
 }
 
+/** Port of the https link from tools/phone.mjs. */
+const PHONE_HTTPS_PORT = 8443;
+
+/**
+ * Browsers only open the mic on secure pages (https or localhost); a phone opening the laptop's address over the
+ * Wi-Fi gets a plain http page.
+ */
+export class MicNeedsSecurePage extends Error {
+  constructor() {
+    const secure = typeof window === 'undefined' ? null : `https://${window.location.hostname}:${PHONE_HTTPS_PORT}`;
+    super(
+      secure
+        ? `This browser only lets Luna hear you on a secure page. Open ${secure} instead, or type your answer.`
+        : 'This browser only lets Luna hear you on a secure (https) page. Type your answer instead.',
+    );
+  }
+}
+
 export function useVoiceRecorder() {
   const recorder = useAudioRecorder(SPEECH_PRESET);
   const recorderState = useAudioRecorderState(recorder, 100);
@@ -55,7 +74,13 @@ export function useVoiceRecorder() {
     stopRequested.current = false;
     setPhase('starting');
     try {
-      const permission = await requestRecordingPermissionsAsync();
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && !window.isSecureContext) {
+        throw new MicNeedsSecurePage();
+      }
+      // Asking opens the microphone just to close it again (on the web, a whole extra start), so only ask when it
+      // isn't already allowed: the recording then starts sooner and the learner's first words aren't lost.
+      const known = await getRecordingPermissionsAsync();
+      const permission = known.granted ? known : await requestRecordingPermissionsAsync();
       if (!permission.granted) {
         throw new MicPermissionDenied();
       }

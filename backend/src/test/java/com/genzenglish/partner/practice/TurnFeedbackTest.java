@@ -135,6 +135,30 @@ class TurnFeedbackTest {
     }
 
     @Test
+    void aNativeExplanationInTheWrongScriptIsReplacedByTheTemplate() {
+        // A model once began a Kannada note with a Malayalam word ("ഇതുവരെ").
+        Raw raw = new Raw(List.of(new RawCorrection("did not see it yet", "haven't seen it yet", "Up to now.",
+                "ഇതുവരെ ಆಗಿರುವ ಕೆಲಸದ ಬಗ್ಗೆ ಹೇಳಲು 'haven't seen it yet' ಬಳಸುವುದು ಸೂಕ್ತ.")), null, null, null);
+
+        TurnFeedback kannada = TurnFeedback.fromRaw(raw, "They did not see it yet", ExplanationLanguage.KANNADA)
+                .withNativeFallback(ExplanationLanguage.KANNADA);
+
+        String why = kannada.corrections().getFirst().whyNative();
+        assertThat(why).doesNotContain("ഇതുവരെ");
+        assertThat(TurnFeedback.writtenIn(why, ExplanationLanguage.KANNADA)).isTrue();
+    }
+
+    @Test
+    void nativeExplanationsMayQuoteEnglishButNotOtherScripts() {
+        assertThat(TurnFeedback.writtenIn("ಇಲ್ಲಿ 'scenes' ಬಹುವಚನ ಆಗಿರುವುದರಿಂದ 'were' ಬಳಸಿ.", ExplanationLanguage.KANNADA))
+                .isTrue();
+        assertThat(TurnFeedback.writtenIn("समय की अवधि के लिए \"for\" बोलिए।", ExplanationLanguage.HINDI)).isTrue();
+        assertThat(TurnFeedback.writtenIn("Use 'were' because scenes is plural.", ExplanationLanguage.KANNADA))
+                .as("all English is not a Kannada explanation").isFalse();
+        assertThat(TurnFeedback.writtenIn("ಇದು தமிழ் word", ExplanationLanguage.KANNADA)).isFalse();
+    }
+
+    @Test
     void modelRewritesAndNewWordsMustFitWhatWasSaid() {
         String said = "I was very tired after the long journey";
         TurnFeedback feedback = TurnFeedback.fromRaw(new Raw(List.of(), null,

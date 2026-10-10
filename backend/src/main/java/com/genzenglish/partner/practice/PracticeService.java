@@ -1,6 +1,7 @@
 package com.genzenglish.partner.practice;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -73,6 +75,11 @@ public class PracticeService {
     static final int MAX_SUMMARY_CORRECTIONS = 3;
     static final int MAX_SUMMARY_UNCLEAR_WORDS = 3;
     static final String INTERVIEW_TITLE = "Mock interview";
+    /**
+     * In a chat that runs on time, the first answer this close to the end is the last one: Luna wraps up after it,
+     * so the goodbye lands as the time runs out.
+     */
+    static final Duration WRAP_UP_BEFORE_THE_END = Duration.ofSeconds(30);
     private static final Logger log = LoggerFactory.getLogger(PracticeService.class);
 
     private final PracticeSessionRepository sessions;
@@ -91,11 +98,15 @@ public class PracticeService {
     private final Json json;
     private final Clock clock;
     private final TransactionTemplate tx;
+    /** How long a free chat runs before Luna wraps up (it ends sooner if the learner taps Finish). */
+    private final Duration freeTalkTime;
 
     public PracticeService(PracticeSessionRepository sessions, TurnRepository turns, ProfileService profiles,
             UserRepository users, SpeechToText stt, KaiVoice voice, KaiTutor tutor, TurnCoach coach,
             SoundCheck soundCheck, SessionSummarizer summarizer, KaiHinter hinter, InterviewPlanner planner,
-            PracticeProgress progress, Json json, Clock clock, TransactionTemplate tx) {
+            PracticeProgress progress, Json json, Clock clock, TransactionTemplate tx,
+            @Value("${app.practice.free-talk-time:10m}") Duration freeTalkTime) {
+        this.freeTalkTime = freeTalkTime;
         this.sessions = sessions;
         this.turns = turns;
         this.profiles = profiles;
@@ -119,11 +130,14 @@ public class PracticeService {
      *
      * @param brief     the warm-up topic, the learner's goal in a roleplay, or the job in a mock interview
      * @param prompt    the scene description added to Luna's system prompt
-     * @param criteria  what counts as success; empty for warm-ups and free talk
-     * @param questions a mock interview's planned questions, in order; empty for other chats
+     * @param criteria    what counts as success; empty for warm-ups and free talk
+     * @param questions   a mock interview's planned questions, in order; empty for other chats
+     * @param targetTurns answers before Luna wraps up; for a chat that runs on time, only an upper bound
+     * @param timeLimit   how long a chat that runs on time lasts (free talk); null for chats that end after a number of
+     *                    answers
      */
-    private record Scene(PracticeKind kind, String scenario, String title, String brief, int targetTurns,
-            String prompt, List<Criterion> criteria, List<String> questions) {
+    record Scene(PracticeKind kind, String scenario, String title, String brief, int targetTurns,
+            String prompt, List<Criterion> criteria, List<String> questions, Duration timeLimit) {
 
         /** Luna's scene for the reply to answer {@code turnNumber}, pointing at the next planned question if any. */
         String promptFor(int turnNumber) {
@@ -133,6 +147,17 @@ public class PracticeService {
 
         List<String> criteriaTexts() {
             return criteria.stream().map(Criterion::text).toList();
+        }
+
+        /**
+         * Whether Luna wraps up after answer {@code turnNumber}: all the planned answers are in, or the chat runs on
+         * time and it's nearly up.
+         */
+        boolean wrapsUpAfter(int turnNumber, Instant startedAt, Instant now) {
+            if (turnNumber >= targetTurns) {
+                return true;
+            }
+            return timeLimit != null && !now.isBefore(startedAt.plus(timeLimit).minus(WRAP_UP_BEFORE_THE_END));
         }
     }
 
@@ -166,7 +191,7 @@ public class PracticeService {
                 FreeTalkTopics.Topic topic = request.scenario() == null ? FreeTalkTopics.OPEN
                         : FreeTalkTopics.find(request.scenario()).orElseThrow(() -> ApiException.notFound(
                                 "topic_missing", "We couldn't find that topic. Pick another one."));
-                yield new Opening(freeTalk(topic), null, null, freeTalkOpening(firstName(userId), topic));
+                yield new Opening(freeTalk(topic, freeTalkTime), null, null, freeTalkOpening(firstName(userId), topic));
             }
             case INTERVIEW -> {
                 String pasted = request.context() == null ? "" : request.context().strip();
@@ -190,7 +215,8 @@ public class PracticeService {
                     start.topic(), start.planJson(), opening, now));
         });
         return new StartResponse(session.getId(), scene.kind(), scene.scenario(), scene.title(), scene.brief(), 1,
-                scene.targetTurns(), kaiLine(opening, profile), scene.criteriaTexts());
+                scene.targetTurns(), scene.timeLimit() == null ? null : Math.toIntExact(scene.timeLimit().toSeconds()),
+                kaiLine(opening, profile), scene.criteriaTexts());
     }
 
     /** Two ideas for what the learner could say next. Doesn't count as an answer. */
@@ -198,7 +224,7 @@ public class PracticeService {
         PracticeSession session = activeSession(userId, sessionId);
         Scene scene = scene(session);
         List<Turn> previous = turns.findBySessionIdOrderBySeqAsc(sessionId);
-        if (previous.size() >= scene.targetTurns()) {
+        if (previous.size() >= scene.targetTurns() || session.getFinalTurn() != null) {
             throw ApiException.conflict("session_done", "Luna has wrapped up this chat. See how you did.");
         }
         LearnerProfile profile = profiles.get(userId);
@@ -262,7 +288,8 @@ public class PracticeService {
                 corrections, feedback.stream().mapToInt(f -> f.corrections().size()).sum(), unclearWords(feedback),
                 scene.criteriaTexts()), scene.criteria(), pronunciation(answered));
         Scorecard scorecard = scene.criteria().isEmpty() ? null : SuccessCriteria.scorecard(review.criteria());
-        PracticeRewards.Reward reward = PracticeRewards.of(stats, scene.targetTurns(),
+        boolean finished = answered.size() >= scene.targetTurns() || session.getFinalTurn() != null;
+        PracticeRewards.Reward reward = PracticeRewards.of(stats, finished,
                 scorecard != null && scorecard.verdict() == ScorecardVerdict.REACHED);
         Summary summary = new Summary(sessionId, scene.kind(), scene.scenario(), scene.title(), Stats.of(stats),
                 reward.total(), reward.items(), review.note(), corrections, review.scores(), review.focus(),
@@ -316,7 +343,7 @@ public class PracticeService {
                 audio == null ? InputMode.TEXT : InputMode.VOICE, durationMs, audio,
                 SpeechMetrics.analyze(text, durationMs), prompt, scene.promptFor(turnNumber),
                 previous.stream().map(t -> new KaiTutor.Exchange(t.getLearnerText(), t.getReplyText())).toList(),
-                turnNumber >= scene.targetTurns(),
+                scene.wrapsUpAfter(turnNumber, session.getStartedAt(), clock.instant()),
                 new KaiPersona.LearnerContext(displayName(userId), profile.getLevel(), profile.getGoal()), profile));
     }
 
@@ -421,16 +448,23 @@ public class PracticeService {
                     turn.setScoresJson(json.write(new TurnScores(checked.pronunciation())));
                 }
                 turns.saveAndFlush(turn);
-                if (p.durationMs() != null) {
-                    sessions.findById(p.session().getId()).ifPresent(s -> s.addSpeakingTime(p.durationMs()));
+                if (p.durationMs() != null || p.last()) {
+                    sessions.findById(p.session().getId()).ifPresent(s -> {
+                        if (p.durationMs() != null) {
+                            s.addSpeakingTime(p.durationMs());
+                        }
+                        if (p.last()) {
+                            s.wrapUpAt(p.turnNumber());
+                        }
+                    });
                 }
             });
         } catch (DataIntegrityViolationException e) {
             // A concurrent retry stored this answer first; return what was stored.
             return replayIfAnswered(p.session(), p.scene(), p.turnNumber()).orElseThrow(() -> e);
         }
-        return answerResponse(p.scene(), p.turnNumber(), p.text(), p.stats().wordsPerMinute(), p.stats().fillerCount(),
-                checked.feedback(), kai);
+        return answerResponse(p.turnNumber(), p.text(), p.stats().wordsPerMinute(), p.stats().fillerCount(),
+                checked.feedback(), kai, p.last());
     }
 
     /** The reviewers never throw for provider problems, so this only falls back if the task itself blew up. */
@@ -458,7 +492,8 @@ public class PracticeService {
     }
 
     private Optional<AnswerResponse> replayIfAnswered(PracticeSession session, Scene scene, int turnNumber) {
-        if (turnNumber > scene.targetTurns()) {
+        Integer finalTurn = session.getFinalTurn();
+        if (turnNumber > scene.targetTurns() || (finalTurn != null && turnNumber > finalTurn)) {
             throw ApiException.conflict("session_done", "Luna has wrapped up this chat. See how you did.");
         }
         int answered = turns.countBySessionId(session.getId());
@@ -469,14 +504,15 @@ public class PracticeService {
             return Optional.empty();
         }
         Turn turn = turns.findBySessionIdAndSeq(session.getId(), turnNumber).orElseThrow(PracticeService::missing);
-        return Optional.of(answerResponse(scene, turnNumber, turn.getLearnerText(), turn.getWordsPerMinute(),
+        boolean done = turnNumber >= scene.targetTurns() || (finalTurn != null && turnNumber >= finalTurn);
+        return Optional.of(answerResponse(turnNumber, turn.getLearnerText(), turn.getWordsPerMinute(),
                 turn.getFillerCount() == null ? 0 : turn.getFillerCount(), feedbackOf(turn),
-                kaiLine(turn.getReplyText(), profiles.get(session.getUserId()))));
+                kaiLine(turn.getReplyText(), profiles.get(session.getUserId())), done));
     }
 
-    private static AnswerResponse answerResponse(Scene scene, int turnNumber, String transcript, Integer wpm,
-            int fillers, TurnFeedback feedback, KaiLine kai) {
-        boolean done = turnNumber >= scene.targetTurns();
+    /** @param done Luna wrapped up after this answer */
+    private static AnswerResponse answerResponse(int turnNumber, String transcript, Integer wpm, int fillers,
+            TurnFeedback feedback, KaiLine kai, boolean done) {
         return new AnswerResponse(turnNumber, transcript, wpm, fillers, feedback, done, done ? null : turnNumber + 1,
                 kai);
     }
@@ -539,7 +575,8 @@ public class PracticeService {
             case WARM_UP -> warmUp(session.getTopic());
             // A roleplay removed from the catalog mid-session can't continue.
             case ROLEPLAY -> roleplay(RoleplayCatalog.find(session.getScenario()).orElseThrow(PracticeService::missing));
-            case FREE_TALK -> freeTalk(FreeTalkTopics.find(session.getScenario()).orElse(FreeTalkTopics.OPEN));
+            case FREE_TALK -> freeTalk(FreeTalkTopics.find(session.getScenario()).orElse(FreeTalkTopics.OPEN),
+                    freeTalkTime);
             case INTERVIEW -> interview(Optional.ofNullable(json.read(session.getPlanJson(), InterviewPlan.class))
                     .orElseThrow(PracticeService::missing));
         };
@@ -547,22 +584,24 @@ public class PracticeService {
 
     private static Scene warmUp(String topic) {
         return new Scene(PracticeKind.WARM_UP, null, "Warm-up chat", topic, PracticeKind.WARM_UP.defaultTargetTurns(),
-                KaiTutor.warmUpScene(topic), List.of(), List.of());
+                KaiTutor.warmUpScene(topic), List.of(), List.of(), null);
     }
 
     private static Scene roleplay(Roleplay roleplay) {
         return new Scene(PracticeKind.ROLEPLAY, roleplay.slug(), roleplay.title(), roleplay.goal(),
-                roleplay.targetTurns(), KaiTutor.roleplayScene(roleplay), roleplay.criteria(), List.of());
+                roleplay.targetTurns(), KaiTutor.roleplayScene(roleplay), roleplay.criteria(), List.of(), null);
     }
 
-    private static Scene freeTalk(FreeTalkTopics.Topic topic) {
+    /** Free talk runs on time; its answer count is only an upper bound. */
+    static Scene freeTalk(FreeTalkTopics.Topic topic, Duration time) {
         return new Scene(PracticeKind.FREE_TALK, topic.slug(), "Talk with Luna", topic.title(),
-                PracticeKind.FREE_TALK.defaultTargetTurns(), KaiTutor.freeTalkScene(topic), List.of(), List.of());
+                PracticeKind.FREE_TALK.defaultTargetTurns(), KaiTutor.freeTalkScene(topic), List.of(), List.of(),
+                time);
     }
 
     private static Scene interview(InterviewPlan plan) {
         return new Scene(PracticeKind.INTERVIEW, null, INTERVIEW_TITLE, plan.position(), plan.questions().size(),
-                KaiTutor.interviewScene(plan), InterviewPlanner.CRITERIA, plan.questions());
+                KaiTutor.interviewScene(plan), InterviewPlanner.CRITERIA, plan.questions(), null);
     }
 
     static String warmUpOpening(String firstName, String topic) {

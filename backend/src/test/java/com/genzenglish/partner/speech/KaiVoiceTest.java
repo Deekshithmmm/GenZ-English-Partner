@@ -33,7 +33,16 @@ class KaiVoiceTest {
 
     /** A provider that answers every English request with the same tiny clip. */
     private TextToSpeech provider(boolean bySentence, boolean fails, String cacheTag) {
+        return provider(bySentence, fails, cacheTag, false);
+    }
+
+    private TextToSpeech provider(boolean bySentence, boolean fails, String cacheTag, boolean liveLines) {
         return new TextToSpeech() {
+            @Override
+            public boolean makesLiveLines() {
+                return liveLines;
+            }
+
             @Override
             public SpeechOutput synthesize(TextToSpeechRequest request) {
                 asked.add(request);
@@ -89,6 +98,40 @@ class KaiVoiceTest {
         assertThat(dto.mode()).isEqualTo(SpeechOutput.Mode.DEVICE);
         assertThat(dto.audioUrl()).isNull();
         assertThat(asked).isEmpty();
+    }
+
+    /** Waits until the live clip {@code id} is no longer being made. */
+    private void awaitMade(String id) throws InterruptedException {
+        for (int i = 0; i < 500 && clips.live(id).isPresent(); i++) {
+            Thread.sleep(10);
+        }
+    }
+
+    @Test
+    void withALiveModelLunasLineGoesOutAtOnceWithAClipThatFillsAsItsMade() throws InterruptedException {
+        SpeechDto dto = voice(provider(true, false, "paid/voice-1", true)).speak("Nice! What did you buy?", profile);
+
+        assertThat(dto.mode()).isEqualTo(SpeechOutput.Mode.AUDIO);
+        assertThat(dto.audioUrl()).startsWith("/api/v1/speech/live/");
+        String id = dto.audioUrl().substring("/api/v1/speech/live/".length());
+        awaitMade(id);
+        // Once made, it's an ordinary clip, so the line can be played again.
+        assertThat(clips.get(id)).hasValueSatisfying(clip -> assertThat(clip.audio()).containsExactly(1, 2, 3));
+        assertThat(asked).singleElement().satisfies(request -> {
+            assertThat(request.live()).isTrue();
+            assertThat(request.early()).isFalse();
+            assertThat(request.text()).isEqualTo("Nice! What did you buy?");
+        });
+    }
+
+    @Test
+    void whenTheLiveModelFailsThereIsNoClipSoTheAppSaysTheLineAnotherWay() throws InterruptedException {
+        SpeechDto dto = voice(provider(true, true, "paid/voice-1", true)).speak("Nice! What did you buy?", profile);
+
+        String id = dto.audioUrl().substring("/api/v1/speech/live/".length());
+        awaitMade(id);
+        assertThat(clips.live(id)).isEmpty();
+        assertThat(clips.get(id)).isEmpty();
     }
 
     @Test

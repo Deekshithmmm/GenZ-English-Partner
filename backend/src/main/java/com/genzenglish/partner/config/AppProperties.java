@@ -43,7 +43,12 @@ public record AppProperties(
         }
     }
 
-    public record Cors(List<String> allowedOrigins) {
+    /**
+     * @param allowedOrigins origin patterns a browser app may call the API from
+     * @param allowLan       also let in pages served from a private network address, like a phone on the laptop's
+     *                       Wi-Fi or hotspot opening the web app at the laptop's address (development only)
+     */
+    public record Cors(List<String> allowedOrigins, boolean allowLan) {
         public Cors {
             allowedOrigins = allowedOrigins == null ? List.of() : List.copyOf(allowedOrigins);
         }

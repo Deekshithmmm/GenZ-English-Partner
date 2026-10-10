@@ -37,14 +37,43 @@ public class KaiVoice {
     }
 
     /**
-     * How the app should voice a whole line from Luna. With a provider that voices by sentence, the app speaks the
-     * text itself, asking {@link #voice} for each sentence as it goes, so the reply isn't held up making audio.
+     * How the app should voice a whole line from Luna. A voice with a live model makes the whole line now (about half
+     * a second), so the line arrives ready to play. Otherwise, with a provider that voices by sentence, the app speaks
+     * the text itself, asking {@link #voice} for each sentence as it goes, so the reply isn't held up making audio.
      */
     public SpeechDto speak(String text, LearnerProfile profile) {
+        if (tts.makesLiveLines()) {
+            return live(text, profile);
+        }
         if (tts.voicesBySentence()) {
             return device(profile, LANGUAGE_TAG);
         }
         return voice(text, LANGUAGE_TAG, profile, false);
+    }
+
+    /**
+     * A whole conversation line from the live model, streamed: the line goes out at once with a clip that fills as the
+     * audio is made, and the app starts playing at the first audio (about a third of a second in). Lines aren't kept
+     * on disk: each is said once. If the voice fails, fetching the clip fails and the app says the line sentence by
+     * sentence instead.
+     */
+    private SpeechDto live(String text, LearnerProfile profile) {
+        TextToSpeechRequest request = new TextToSpeechRequest(text, profile.getTutorVoice(),
+                profile.getSpeakingSpeed().doubleValue(), LANGUAGE_TAG, false, true);
+        SpeechClipStore.LiveClip clip = clips.open("audio/mpeg");
+        Thread.ofVirtual().name("live-line").start(() -> {
+            try {
+                tts.stream(request, clip::add);
+                clip.finish();
+            } catch (RuntimeException e) {
+                log.warn("Live line TTS failed ({}): {}; the app says it sentence by sentence", tts.providerName(),
+                        e.toString());
+                clip.fail();
+            }
+        });
+        // The speed is in the audio already, so the app plays it at normal speed.
+        return new SpeechDto(SpeechOutput.Mode.AUDIO, "/api/v1/speech/live/" + clip.id(), profile.getTutorVoice(), 1.0,
+                LANGUAGE_TAG);
     }
 
     /**

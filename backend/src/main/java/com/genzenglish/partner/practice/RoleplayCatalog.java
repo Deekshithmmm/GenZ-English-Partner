@@ -49,7 +49,7 @@ public final class RoleplayCatalog {
                     "a cheerful barista at a busy café near a college",
                     "a customer ordering for themselves and a friend",
                     "Order two drinks and something to eat, ask one question about the menu, and pay.",
-                    "Hi, welcome in! What can I get started for you today?", 5,
+                    "Hi, welcome in! What can I get started for you today?", 8,
                     List.of(Criterion.of("Order your drinks and something to eat",
                                     "coffee|chai|tea|latte|cappuccino|mocha|espresso|juice|shake|milkshake|lassi"
                                             + "|smoothie|lemonade|cold drink|sandwich|burger|croissant|cake|muffin"
@@ -65,7 +65,7 @@ public final class RoleplayCatalog {
                     "an interviewer at a mid-size software company, starting a first-round interview",
                     "a final-year student or fresher interviewing for an entry-level role",
                     "Introduce yourself clearly: who you are now, what you've done, and what you want next.",
-                    "Thanks for joining. Let's start simple: tell me a little about yourself.", 6,
+                    "Thanks for joining. Let's start simple: tell me a little about yourself.", 10,
                     List.of(Criterion.of("Say who you are now",
                                     "i'm|i am|my name|myself|student|final year|fresher|graduate|graduated"
                                             + "|studying|working as"),
@@ -79,7 +79,7 @@ public final class RoleplayCatalog {
                     "a senior engineer interviewing a candidate about their projects",
                     "a candidate walking through a project they built",
                     "Explain one project: the problem, what you built, your part in it, and what you learnt.",
-                    "I see a few projects on your résumé. Pick the one you're proudest of and walk me through it.", 6,
+                    "I see a few projects on your résumé. Pick the one you're proudest of and walk me through it.", 10,
                     List.of(Criterion.of("Explain the problem your project solves",
                                     "problem|solve|solves|solved|issue|needed|users|manual|difficult|hard to"
                                             + "|struggle|pain"),
@@ -94,7 +94,7 @@ public final class RoleplayCatalog {
                     "an HR manager running the final interview round",
                     "a candidate answering the usual HR questions",
                     "Answer questions about yourself, your strengths and why you want the job, calmly and honestly.",
-                    "Good to meet you. Before we talk about the role, why do you want to work with us?", 6,
+                    "Good to meet you. Before we talk about the role, why do you want to work with us?", 10,
                     List.of(Criterion.of("Say why you want this job",
                                     "because|want to work|interested|excited|company|role|growth|grow|learn"
                                             + "|culture|products?|mission"),
@@ -109,7 +109,7 @@ public final class RoleplayCatalog {
                     "a participant who wants to make a clear point and respond to others",
                     "Give your view on the topic, respond politely to a different opinion, and sum up.",
                     "Okay, the topic is: should college attendance be optional? I'll start. I think it should be, "
-                            + "because adults can manage their own time. What's your take?", 6,
+                            + "because adults can manage their own time. What's your take?", 10,
                     List.of(Criterion.of("State your view clearly",
                                     "i think|i believe|in my opinion|i feel|my view|i agree|i disagree"
                                             + "|i strongly|my point"),
@@ -123,7 +123,7 @@ public final class RoleplayCatalog {
                     "a friendly teammate meeting a new joiner on their first day",
                     "a new joiner on their first day at work",
                     "Introduce yourself, make a bit of small talk, and find out who to ask for help.",
-                    "Hey, you must be the new joiner! I sit right next to you. How's the first day going so far?", 5,
+                    "Hey, you must be the new joiner! I sit right next to you. How's the first day going so far?", 8,
                     List.of(Criterion.of("Introduce yourself",
                                     "i'm|i am|my name|myself|i joined|i've joined|new joiner"),
                             Criterion.of("Make a bit of small talk",
@@ -136,7 +136,7 @@ public final class RoleplayCatalog {
                     "a professor judging student project proposals",
                     "a student pitching their project idea",
                     "Explain the problem, your solution and why it matters, then answer the professor's questions.",
-                    "Alright, you have two minutes. What's your project, and what problem does it solve?", 5,
+                    "Alright, you have two minutes. What's your project, and what problem does it solve?", 8,
                     List.of(Criterion.of("Explain the problem",
                                     "problem|issue|struggle|struggling|hard|difficult|waste|wasting|nobody"
                                             + "|no one|can't find|takes too long"),
@@ -150,7 +150,7 @@ public final class RoleplayCatalog {
                     "a student defending their project",
                     "Explain your project choices clearly, and handle a question you're not sure about.",
                     "Good afternoon. Before we go into details, can you summarise your project in a few sentences?",
-                    5,
+                    8,
                     List.of(Criterion.of("Summarise the project clearly",
                                     "our project|my project|the project|we built|we developed|we made|it is a"
                                             + "|it's a|aims to|system"),
@@ -163,7 +163,7 @@ public final class RoleplayCatalog {
                     "a friendly student from another college, standing in a queue at a fest",
                     "a student at the fest who's open to making a new friend",
                     "Start a chat, find something you have in common, and suggest catching an event together.",
-                    "This queue is moving so slowly! Are you here for the music night too?", 5,
+                    "This queue is moving so slowly! Are you here for the music night too?", 8,
                     List.of(Criterion.of("Start the chat in a friendly way",
                                     "yes|yeah|yep|hi|hello|hey|i am|i'm|totally"),
                             Criterion.of("Find something you have in common",
@@ -175,7 +175,7 @@ public final class RoleplayCatalog {
                     "a customer care agent for an online shopping app",
                     "a customer whose order arrived damaged",
                     "Explain the problem clearly, give your order details, and agree on a refund or replacement.",
-                    "Thank you for calling. My name is Luna. How can I help you today?", 5,
+                    "Thank you for calling. My name is Luna. How can I help you today?", 8,
                     List.of(Criterion.of("Explain the problem clearly",
                                     "damaged|broken|cracked|wrong|problem|issue|not working|scratched|torn"
                                             + "|missing|dented"),
@@ -187,7 +187,7 @@ public final class RoleplayCatalog {
                     "a busy but reasonable landlord who gets a call from a tenant",
                     "a tenant whose water heater has stopped working",
                     "Describe the problem, ask for it to be fixed by a specific day, and confirm the plan.",
-                    "Hello? Yes, who's this?", 5,
+                    "Hello? Yes, who's this?", 8,
                     List.of(Criterion.of("Describe the problem",
                                     "water heater|geyser|heater|hot water|not working|stopped|broken|repair"),
                             Criterion.of("Ask for it to be fixed by a specific day",
@@ -200,7 +200,7 @@ public final class RoleplayCatalog {
                     "a team manager who's a little worried about an upcoming deadline",
                     "an employee who needs three days off for a family function",
                     "Ask for leave politely, explain why, and offer a plan for your work while you're away.",
-                    "Hi, you wanted to talk? I've got a few minutes before my next call.", 5,
+                    "Hi, you wanted to talk? I've got a few minutes before my next call.", 8,
                     List.of(Criterion.of("Ask for leave politely",
                                     "could i|can i|may i|would it be possible|i'd like to|i would like to"
                                             + "|request|please|i need to take"),

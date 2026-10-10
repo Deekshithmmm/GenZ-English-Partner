@@ -67,7 +67,8 @@ class PracticeFlowIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.kind").value("WARM_UP"))
                 .andExpect(jsonPath("$.turnNumber").value(1))
-                .andExpect(jsonPath("$.targetTurns").value(4))
+                .andExpect(jsonPath("$.targetTurns").value(6))
+                .andExpect(jsonPath("$.timeLimitSeconds").doesNotExist())
                 .andExpect(jsonPath("$.brief").isNotEmpty())
                 .andExpect(jsonPath("$.kai.text").value(org.hamcrest.Matchers.startsWith("Hey Meera, let's warm up.")))
                 .andReturn());
@@ -94,25 +95,29 @@ class PracticeFlowIntegrationTest {
         mvc.perform(textAnswer(warmUpId, 3, "My friends and I ate ice cream after that.", token))
                 .andExpect(jsonPath("$.done").value(false));
         mvc.perform(textAnswer(warmUpId, 4, "Yes, I would definitely go again next month.", token))
+                .andExpect(jsonPath("$.done").value(false));
+        mvc.perform(textAnswer(warmUpId, 5, "My cousins want to come with us next time.", token))
+                .andExpect(jsonPath("$.done").value(false));
+        mvc.perform(textAnswer(warmUpId, 6, "We will take the early bus so we have the whole day.", token))
                 .andExpect(jsonPath("$.done").value(true))
                 .andExpect(jsonPath("$.nextTurnNumber").doesNotExist());
-        mvc.perform(textAnswer(warmUpId, 5, "One more thing", token))
+        mvc.perform(textAnswer(warmUpId, 7, "One more thing", token))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("session_done"));
 
         JsonNode summary = body(mvc.perform(authed(post("/api/v1/practice/" + warmUpId + "/complete"), token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.summary.stats.answers").value(4))
-                .andExpect(jsonPath("$.summary.xp").value(60))
+                .andExpect(jsonPath("$.summary.stats.answers").value(6))
+                .andExpect(jsonPath("$.summary.xp").value(80))
                 .andExpect(jsonPath("$.summary.corrections[0].original").value("Myself Meera"))
                 .andExpect(jsonPath("$.summary.note").isNotEmpty())
                 .andExpect(jsonPath("$.progress.streak").value(1))
-                .andExpect(jsonPath("$.progress.xpToday").value(60))
+                .andExpect(jsonPath("$.progress.xpToday").value(80))
                 .andReturn());
         // Completing again is idempotent and doesn't credit XP twice.
         mvc.perform(authed(post("/api/v1/practice/" + warmUpId + "/complete"), token))
                 .andExpect(jsonPath("$.summary.note").value(summary.get("summary").get("note").asString()))
-                .andExpect(jsonPath("$.progress.xpTotal").value(60));
+                .andExpect(jsonPath("$.progress.xpTotal").value(80));
         mvc.perform(textAnswer(warmUpId, 1, "Too late", token))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("practice_missing"));
@@ -120,7 +125,7 @@ class PracticeFlowIntegrationTest {
         String roleplayId = body(mvc.perform(start(token, "ROLEPLAY", "tell-me-about-yourself"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.title").value("Tell me about yourself"))
-                .andExpect(jsonPath("$.targetTurns").value(6))
+                .andExpect(jsonPath("$.targetTurns").value(10))
                 .andReturn()).get("sessionId").asString();
         mvc.perform(voiceAnswer(roleplayId, 1, token))
                 .andExpect(status().isOk())
@@ -138,8 +143,8 @@ class PracticeFlowIntegrationTest {
                 .andExpect(jsonPath("$.plan[2].done").value(true))
                 .andExpect(jsonPath("$.streak.current").value(1))
                 .andExpect(jsonPath("$.streak.longest").value(1))
-                .andExpect(jsonPath("$.xp.today").value(75))
-                .andExpect(jsonPath("$.xp.total").value(75));
+                .andExpect(jsonPath("$.xp.today").value(95))
+                .andExpect(jsonPath("$.xp.total").value(95));
     }
 
     @Test
@@ -190,7 +195,9 @@ class PracticeFlowIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.title").value("Talk with Luna"))
                 .andExpect(jsonPath("$.brief").value("Music"))
-                .andExpect(jsonPath("$.targetTurns").value(8))
+                // Free talk runs on time; the answer count is only an upper bound.
+                .andExpect(jsonPath("$.timeLimitSeconds").value(600))
+                .andExpect(jsonPath("$.targetTurns").value(40))
                 .andExpect(jsonPath("$.kai.text").value("Hey Meera! What have you been listening to on repeat lately?"))
                 .andReturn()).get("sessionId").asString();
 

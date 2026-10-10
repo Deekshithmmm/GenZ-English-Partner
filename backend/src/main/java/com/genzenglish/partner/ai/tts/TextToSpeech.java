@@ -1,6 +1,7 @@
 package com.genzenglish.partner.ai.tts;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Luna's voice. Selected by {@code app.ai.tts.provider}.
@@ -18,6 +19,27 @@ public interface TextToSpeech {
      */
     default boolean voicesBySentence() {
         return false;
+    }
+
+    /**
+     * True when this voice has a model quick enough (under about half a second) to make a whole conversation line
+     * while the learner waits ({@link TextToSpeechRequest#live()}). A voice that otherwise goes by sentence then sends
+     * Luna's reply with its audio, ready to play, instead of the app asking for each sentence.
+     */
+    default boolean makesLiveLines() {
+        return false;
+    }
+
+    /**
+     * Makes speech and hands over its audio as it's made, so playback can start before the end is ready. Without a
+     * way to stream, the whole clip arrives at once. Throws, like {@link #synthesize}, when there's no audio.
+     */
+    default void stream(TextToSpeechRequest request, Consumer<byte[]> onAudio) {
+        SpeechOutput output = synthesize(request);
+        if (output.mode() != SpeechOutput.Mode.AUDIO) {
+            throw new IllegalStateException(providerName() + " has no audio for this line");
+        }
+        onAudio.accept(output.audio());
     }
 
     /** The languages this voice speaks, as primary language subtags ("en", "kn"); "*" for any. */
